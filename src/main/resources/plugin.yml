@@ -1,0 +1,11 @@
+name: SkySwordArray
+version: 1.0.0
+main: com.hahhah20.skyswordarray.SkySwordArrayPlugin
+api-version: '1.21'
+commands:
+  skysword:
+    description: 天降剑阵测试技能
+    permission: skysword.use
+permissions:
+  skysword.use:
+    default: op
