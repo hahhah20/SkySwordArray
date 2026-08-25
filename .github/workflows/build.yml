@@ -1,0 +1,31 @@
+name: 构建天剑阵列
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: 编译插件
+        run: mvn -B clean package
+
+      - name: 保存插件 JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: SkySwordArray
+          path: target/SkySwordArray.jar
