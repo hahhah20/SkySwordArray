@@ -1,2 +1,20 @@
 skill:
-  cooldown: 5
+  cooldown-seconds: 5
+  range: 32
+  charge-ticks: 40
+  sword-count: 24
+  waves: 3
+  wave-interval-ticks: 8
+  sword-height: 18
+  sword-fall-ticks: 14
+  damage: 8
+  impact-radius: 2.5
+  final-delay-ticks: 12
+  final-height: 28
+  final-fall-ticks: 32
+  final-damage: 25
+  final-radius: 6
+
+visual:
+  array-radius: 7
+  ring-points: 48
