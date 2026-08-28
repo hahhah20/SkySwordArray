@@ -1,15 +1,34 @@
 package com.hahhah20.skyswordarray;
 
-import com.hahhah20.skyswordarray.skill.SkySwordSkill;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class SkySwordArrayPlugin extends JavaPlugin {
     private SkySwordSkill skill;
-    public void onEnable(){
+
+    @Override
+    public void onEnable() {
         saveDefaultConfig();
-        skill=new SkySwordSkill(this);
+        skill = new SkySwordSkill(this);
+
+        if (getCommand("skysword") != null) {
+            getCommand("skysword").setExecutor((CommandSender sender, Command command, String label, String[] args) -> {
+                if (!(sender instanceof Player player)) {
+                    sender.sendMessage("§c只有玩家可以释放天降剑阵。");
+                    return true;
+                }
+                skill.cast(player);
+                return true;
+            });
+        }
     }
-    public void onDisable(){
-        if(skill!=null) skill.shutdown();
+
+    @Override
+    public void onDisable() {
+        if (skill != null) {
+            skill.shutdown();
+        }
     }
 }
