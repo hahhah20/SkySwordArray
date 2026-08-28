@@ -1,5 +1,6 @@
 package com.hahhah20.skyswordarray;
 
+import com.hahhah20.skyswordarray.skill.FinalSword;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.entity.*;
@@ -21,33 +22,30 @@ public final class SkySwordSkill {
     private final JavaPlugin plugin;
     private final Map<UUID, Long> cd = new ConcurrentHashMap<>();
     private final Set<BukkitTask> tasks = ConcurrentHashMap.newKeySet();
-    private final double range, ar, sh, damage, ir, fd, fr, fh;
-    private final int charge, count, waves, interval, fall, delay, ffall;
+    private final double range, ar, sh, damage, ir;
+    private final int charge, count, waves, interval, fall, delay;
 
     public SkySwordSkill(JavaPlugin p) {
         plugin = p;
         var c = p.getConfig();
-        range = c.getDouble("skill.range");
-        ar = c.getDouble("visual.array-radius");
-        charge = c.getInt("skill.charge-ticks");
-        count = c.getInt("skill.sword-count");
-        waves = Math.max(1, c.getInt("skill.waves"));
-        interval = c.getInt("skill.wave-interval-ticks");
-        sh = c.getDouble("skill.sword-height");
-        fall = c.getInt("skill.sword-fall-ticks");
-        damage = c.getDouble("skill.damage");
-        ir = c.getDouble("skill.impact-radius");
-        delay = c.getInt("skill.final-delay-ticks");
-        fh = c.getDouble("skill.final-height");
-        ffall = c.getInt("skill.final-fall-ticks");
-        fd = c.getDouble("skill.final-damage");
-        fr = c.getDouble("skill.final-radius");
+        range = c.getDouble("skill.range", 32);
+        ar = c.getDouble("visual.array-radius", 7);
+        charge = Math.max(1, c.getInt("skill.charge-ticks", 40));
+        count = Math.max(1, c.getInt("skill.sword-count", 24));
+        waves = Math.max(1, c.getInt("skill.waves", 3));
+        interval = Math.max(1, c.getInt("skill.wave-interval-ticks", 8));
+        sh = c.getDouble("skill.sword-height", 18);
+        fall = Math.max(1, c.getInt("skill.sword-fall-ticks", 14));
+        damage = c.getDouble("skill.damage", 8);
+        ir = c.getDouble("skill.impact-radius", 2.5);
+        delay = Math.max(0, c.getInt("skill.final-delay-ticks", 12));
     }
 
     public void cast(Player p) {
+        if (!p.isOnline() || p.isDead()) return;
         long now = System.currentTimeMillis();
         long last = cd.getOrDefault(p.getUniqueId(), 0L);
-        long cool = (long) (plugin.getConfig().getDouble("skill.cooldown-seconds") * 1000);
+        long cool = (long) (plugin.getConfig().getDouble("skill.cooldown-seconds", 5) * 1000L);
         if (now - last < cool) {
             p.sendActionBar("§c冷却中");
             return;
@@ -72,11 +70,12 @@ public final class SkySwordSkill {
         }
 
         void start() {
-            tasks.add(runTaskTimer(plugin, 0, 1));
+            tasks.add(runTaskTimer(plugin, 0L, 1L));
         }
 
+        @Override
         public void run() {
-            if (!p.isOnline() || p.isDead()) {
+            if (!p.isOnline() || p.isDead() || c.getWorld() == null) {
                 stop();
                 return;
             }
@@ -86,19 +85,27 @@ public final class SkySwordSkill {
             }
             stop();
             rain();
-            new BukkitRunnable() {
+            BukkitTask finalTask = new BukkitRunnable() {
+                @Override
                 public void run() {
-                    finalSword();
+                    tasks.remove(this);
+                    if (p.isOnline() && !p.isDead() && c.getWorld() != null) {
+                        FinalSword.strike(plugin, p, c);
+                    }
                 }
             }.runTaskLater(plugin, delay);
+            tasks.add(finalTask);
         }
 
         void rain() {
             Random r = new Random();
             for (int w = 0; w < waves; w++) {
                 int wi = w;
-                tasks.add(new BukkitRunnable() {
+                BukkitTask task = new BukkitRunnable() {
+                    @Override
                     public void run() {
+                        tasks.remove(this);
+                        if (!p.isOnline() || p.isDead() || c.getWorld() == null) return;
                         int a = count * wi / waves;
                         int b = count * (wi + 1) / waves;
                         for (int i = a; i < b; i++) {
@@ -111,15 +118,13 @@ public final class SkySwordSkill {
                             );
                         }
                     }
-                }.runTaskLater(plugin, (long) w * interval));
+                }.runTaskLater(plugin, (long) wi * interval);
+                tasks.add(task);
             }
         }
 
-        void finalSword() {
-            fall(c.clone().add(0, fh, 0), c.clone().add(0, .45, 0), 1.9f, ffall, fd, fr, true);
-        }
-
         void fall(Location s, Location e, float scale, int dur, double dmg, double rad, boolean fin) {
+            if (s.getWorld() == null || e.getWorld() == null) return;
             ItemDisplay d = s.getWorld().spawn(s, ItemDisplay.class);
             d.setItemStack(new ItemStack(Material.NETHERITE_SWORD));
             d.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.FIXED);
@@ -131,11 +136,13 @@ public final class SkySwordSkill {
                     new Vector3f(scale, scale, scale),
                     new AxisAngle4f()
             ));
-            tasks.add(new BukkitRunnable() {
+            BukkitTask task = new BukkitRunnable() {
                 int age;
 
+                @Override
                 public void run() {
-                    if (!d.isValid()) {
+                    if (!d.isValid() || !p.isOnline() || p.isDead()) {
+                        d.remove();
                         stop();
                         return;
                     }
@@ -155,32 +162,33 @@ public final class SkySwordSkill {
                         stop();
                     }
                 }
-            }.runTaskTimer(plugin, 0, 1));
+            }.runTaskTimer(plugin, 0L, 1L);
+            tasks.add(task);
         }
 
         void impact(Location l, double dmg, double rad, boolean fin) {
             World w = l.getWorld();
+            if (w == null) return;
             w.spawnParticle(fin ? Particle.EXPLOSION_EMITTER : Particle.EXPLOSION, l, fin ? 1 : 2);
             w.spawnParticle(Particle.CRIT, l, fin ? 100 : 25, fin ? 2.5 : .7, .2, fin ? 2.5 : .7, .2);
             w.playSound(l, fin ? Sound.ENTITY_LIGHTNING_BOLT_THUNDER : Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1, fin ? 1.6f : .7f);
             for (Entity e : w.getNearbyEntities(l, rad, rad, rad)) {
-                if (e instanceof LivingEntity v && v != p) {
-                    v.damage(dmg, p);
-                }
+                if (e instanceof LivingEntity v && v != p) v.damage(dmg, p);
             }
         }
 
         void array(int tick) {
             World w = c.getWorld();
+            if (w == null) return;
             double rot = tick * .08;
-            int n = plugin.getConfig().getInt("visual.ring-points");
+            int n = Math.max(8, plugin.getConfig().getInt("visual.ring-points", 48));
             for (int i = 0; i < n; i++) {
                 double a = rot + 2 * Math.PI * i / n;
                 w.spawnParticle(Particle.END_ROD, c.clone().add(Math.cos(a) * ar, sh, Math.sin(a) * ar), 1);
             }
             for (int i = 0; i < 32; i++) {
                 double a = 2 * Math.PI * i / 32;
-                double r = ar * tick / (double) Math.max(1, charge);
+                double r = ar * tick / (double) charge;
                 w.spawnParticle(Particle.CRIT, c.clone().add(Math.cos(a) * r, .05, Math.sin(a) * r), 1);
             }
         }
@@ -192,9 +200,7 @@ public final class SkySwordSkill {
     }
 
     public void shutdown() {
-        for (BukkitTask t : tasks) {
-            t.cancel();
-        }
+        for (BukkitTask t : tasks) t.cancel();
         tasks.clear();
     }
 }
